@@ -18,17 +18,16 @@ export async function getPractices() {
 }
 
 /**
- * Fetch practices owned by a specific GP.
+ * Fetch practices a GP is staff at (via practice_staff join table).
  */
 export async function getGPPractices(gpId) {
   const { data, error } = await supabase
-    .from("practices")
-    .select("*")
-    .eq("owner_id", gpId)
-    .order("name");
+    .from("practice_staff")
+    .select("practice:practices(*)")
+    .eq("gp_id", gpId);
 
   if (error) throw error;
-  return data;
+  return (data || []).map((r) => r.practice).filter(Boolean);
 }
 
 /* ═══════════════════════════════════════════════════════

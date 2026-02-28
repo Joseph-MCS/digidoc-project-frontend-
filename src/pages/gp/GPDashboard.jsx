@@ -71,8 +71,8 @@ export default function GPDashboard() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-sm text-gray-500">
-          {profile?.owned_practices?.[0]?.name
-            ? `${profile.owned_practices[0].name} — `
+          {profile?.practices?.[0]?.name
+            ? `${profile.practices[0].name} — `
             : ""}
           Overview of patient submissions and triage status
         </p>

@@ -7,6 +7,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 /* Auth */
 import PatientAuth from "./pages/auth/PatientAuth";
 import GPAuth from "./pages/auth/GPAuth";
+import ForgotPassword from "./pages/auth/ForgotPassword";
+import ResetPassword from "./pages/auth/ResetPassword";
 
 /* Patient pipeline */
 import Layout from "./components/Layout";
@@ -30,6 +32,8 @@ export default function App() {
       {/* Auth pages */}
       <Route path="/auth/patient" element={<PatientAuth />} />
       <Route path="/auth/gp" element={<GPAuth />} />
+      <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+      <Route path="/auth/reset-password" element={<ResetPassword />} />
 
       {/* ── Patient Pipeline (requires patient role) ── */}
       <Route

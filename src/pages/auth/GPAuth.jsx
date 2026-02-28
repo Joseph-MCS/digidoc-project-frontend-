@@ -122,6 +122,16 @@ export default function GPAuth() {
               </div>
             </div>
 
+            {/* Forgot password */}
+            <div className="text-right">
+              <Link
+                to="/auth/forgot-password"
+                className="text-xs font-medium text-accent hover:text-accent/80"
+              >
+                Forgot password?
+              </Link>
+            </div>
+
             {/* Submit */}
             <button
               type="submit"

@@ -5,6 +5,7 @@ const AuthContext = createContext({
   user: null,
   profile: null,
   loading: true,
+  profileError: false,
   signUp: async () => {},
   signIn: async () => {},
   signOut: async () => {},
@@ -14,50 +15,70 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profileError, setProfileError] = useState(false);
 
   /* Fetch profile from public.profiles, including practice info */
-  const fetchProfile = async (userId) => {
+  const fetchProfile = async (userId, retryCount = 0) => {
     try {
-      // Try the full query with practice join first
-      let { data, error } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
-        .select("*, practice:practices!profiles_practice_id_fkey(id, name, address)")
+        .select("*")
         .eq("id", userId)
         .single();
 
-      // If the join fails (practices table may not exist yet), fall back to plain query
-      if (error) {
-        const fallback = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", userId)
-          .single();
-        data = fallback.data;
-        error = fallback.error;
+      if (error || !data) {
+        // Retry once after 1.5s — handles slow DB / cold start
+        if (retryCount < 1) {
+          console.warn("fetchProfile: retrying in 1.5s…", error?.message);
+          await new Promise((r) => setTimeout(r, 1500));
+          return fetchProfile(userId, retryCount + 1);
+        }
+        console.error("fetchProfile: failed after retry", error);
+        setProfile(null);
+        setProfileError(true);
+        return null;
       }
 
-      if (!error && data) {
-        // For GPs, also try to fetch the practices they own
-        if (data.role === "gp") {
-          try {
-            const { data: owned } = await supabase
-              .from("practices")
-              .select("*")
-              .eq("owner_id", userId)
-              .order("name");
-            data.owned_practices = owned || [];
-          } catch {
-            data.owned_practices = [];
-          }
+      // For GPs, fetch practices they work at via practice_staff
+      if (data.role === "gp") {
+        try {
+          const { data: staffRecords } = await supabase
+            .from("practice_staff")
+            .select("practice:practices(*)")
+            .eq("gp_id", userId);
+          data.practices = (staffRecords || []).map((r) => r.practice).filter(Boolean);
+        } catch {
+          data.practices = [];
         }
-        setProfile(data);
       }
+
+      // For patients with a practice_id, fetch the practice name
+      if (data.practice_id) {
+        try {
+          const { data: practice } = await supabase
+            .from("practices")
+            .select("id, name, address")
+            .eq("id", data.practice_id)
+            .single();
+          data.practice = practice;
+        } catch {
+          data.practice = null;
+        }
+      }
+
+      setProfileError(false);
+      setProfile(data);
       return data;
     } catch (err) {
       console.error("fetchProfile error:", err);
+      setProfile(null);
+      setProfileError(true);
       return null;
     }
   };
+
+  // Track whether signIn is actively running so onAuthStateChange doesn't double-fetch
+  let signInActive = false;
 
   /* Listen to auth state changes */
   useEffect(() => {
@@ -75,10 +96,11 @@ export function AuthProvider({ children }) {
       setLoading(false);
     });
 
-    // Subscribe to changes
+    // Subscribe to changes (but skip if signIn is handling it)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (signInActive) return; // signIn will handle the profile fetch
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
@@ -117,14 +139,25 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  /* Sign in */
+  /* Sign in — fetches profile before returning so ProtectedRoute has it */
   const signIn = async ({ email, password }) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) throw error;
-    return data;
+    signInActive = true;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+      setUser(data.user);
+      if (data.user) {
+        await fetchProfile(data.user.id);
+      }
+      return data;
+    } finally {
+      signInActive = false;
+      setLoading(false);
+    }
   };
 
   /* Sign out */
@@ -137,7 +170,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, loading, signUp, signIn, signOut }}
+      value={{ user, profile, loading, profileError, signUp, signIn, signOut }}
     >
       {children}
     </AuthContext.Provider>

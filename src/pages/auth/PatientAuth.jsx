@@ -21,6 +21,8 @@ export default function PatientAuth() {
   const [lastName, setLastName] = useState("");
   const [practiceId, setPracticeId] = useState("");
   const [practices, setPractices] = useState([]);
+  const [practicesLoading, setPracticesLoading] = useState(false);
+  const [practicesError, setPracticesError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -29,10 +31,26 @@ export default function PatientAuth() {
   const navigate = useNavigate();
 
   /* Fetch available GP practices for the signup dropdown */
-  useEffect(() => {
+  const loadPractices = () => {
+    setPracticesLoading(true);
+    setPracticesError("");
     getPractices()
-      .then((data) => setPractices(data || []))
-      .catch(() => setPractices([]));
+      .then((data) => {
+        setPractices(data || []);
+        if (!data || data.length === 0) {
+          setPracticesError("No practices found in the database.");
+        }
+      })
+      .catch((err) => {
+        console.error("getPractices error:", err);
+        setPracticesError(err?.message || "Could not load practices.");
+        setPractices([]);
+      })
+      .finally(() => setPracticesLoading(false));
+  };
+
+  useEffect(() => {
+    loadPractices();
   }, []);
 
   const handleSubmit = async (e) => {
@@ -178,28 +196,48 @@ export default function PatientAuth() {
                 <label className="mb-1 block text-xs font-semibold text-gray-600">
                   Your GP Practice
                 </label>
-                <div className="relative">
-                  <Building2
-                    size={16}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <select
-                    value={practiceId}
-                    onChange={(e) => setPracticeId(e.target.value)}
-                    className="w-full appearance-none rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-8 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
-                  >
-                    <option value="">Select your GP practice…</option>
-                    {practices.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}{p.address ? ` — ${p.address}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {practices.length === 0 && (
-                  <p className="mt-1 text-xs text-amber-600">
-                    No practices available yet. Contact your GP office.
-                  </p>
+                {practicesLoading ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-gray-200 py-2.5 px-3 text-sm text-gray-400">
+                    <Loader2 size={14} className="animate-spin" />
+                    Loading practices…
+                  </div>
+                ) : practicesError ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                    <p className="text-xs text-red-700">{practicesError}</p>
+                    <button
+                      type="button"
+                      onClick={loadPractices}
+                      className="mt-1 text-xs font-medium text-red-700 underline hover:text-red-900"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <Building2
+                        size={16}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      />
+                      <select
+                        value={practiceId}
+                        onChange={(e) => setPracticeId(e.target.value)}
+                        className="w-full appearance-none rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-8 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+                      >
+                        <option value="">Select your GP practice…</option>
+                        {practices.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}{p.address ? ` — ${p.address}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {practices.length === 0 && (
+                      <p className="mt-1 text-xs text-amber-600">
+                        No practices found. Contact your GP office.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -246,6 +284,18 @@ export default function PatientAuth() {
                 />
               </div>
             </div>
+
+            {/* Forgot password */}
+            {mode === "login" && (
+              <div className="text-right">
+                <Link
+                  to="/auth/forgot-password"
+                  className="text-xs font-medium text-primary hover:text-primary/80"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            )}
 
             {/* Submit */}
             <button

@@ -70,7 +70,7 @@ export default function GPLayout() {
                 {profile ? `${profile.first_name} ${profile.last_name}` : "GP Staff"}
               </p>
               <p className="text-xs text-gray-500">
-                {profile?.owned_practices?.[0]?.name || "GP Portal"}
+                {profile?.practices?.[0]?.name || "GP Portal"}
               </p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">

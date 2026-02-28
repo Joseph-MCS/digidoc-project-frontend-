@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import { createSubmission } from "../lib/database";
 import {
   ChevronRight,
   ChevronLeft,
@@ -10,6 +12,7 @@ import {
   Send,
   Loader2,
 } from "lucide-react";
+import BodyModel from "../components/BodyModel";
 
 /* ── Constants ── */
 const BODY_AREAS = [
@@ -101,7 +104,6 @@ const SEVERITY_LEVELS = [
 
 const STEPS = [
   { label: "About You", icon: User },
-  { label: "Body Area", icon: ClipboardList },
   { label: "Symptoms", icon: ClipboardList },
   { label: "Details", icon: Calendar },
   { label: "Review", icon: Send },
@@ -110,6 +112,7 @@ const STEPS = [
 /* ── Main Component ── */
 export default function SymptomForm() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
@@ -119,7 +122,7 @@ export default function SymptomForm() {
     lastName: "",
     age: "",
     gender: "",
-    bodyArea: "",
+    bodyAreas: [],
     selectedSymptoms: [],
     customSymptom: "",
     duration: "",
@@ -131,6 +134,22 @@ export default function SymptomForm() {
   /* Helpers */
   const set = (key) => (e) =>
     setForm((prev) => ({ ...prev, [key]: e.target ? e.target.value : e }));
+
+  const toggleBodyArea = (area) =>
+    setForm((prev) => {
+      const has = prev.bodyAreas.includes(area);
+      const newAreas = has
+        ? prev.bodyAreas.filter((a) => a !== area)
+        : [...prev.bodyAreas, area];
+      // When removing an area, also remove its associated symptoms
+      const removedSymptoms = has
+        ? (COMMON_SYMPTOMS[area] || [])
+        : [];
+      const newSymptoms = has
+        ? prev.selectedSymptoms.filter((s) => !removedSymptoms.includes(s))
+        : prev.selectedSymptoms;
+      return { ...prev, bodyAreas: newAreas, selectedSymptoms: newSymptoms };
+    });
 
   const toggleSymptom = (s) =>
     setForm((prev) => ({
@@ -157,12 +176,10 @@ export default function SymptomForm() {
       case 0:
         return form.firstName && form.lastName && form.age && form.gender;
       case 1:
-        return form.bodyArea;
+        return form.bodyAreas.length > 0 && form.selectedSymptoms.length > 0;
       case 2:
-        return form.selectedSymptoms.length > 0;
-      case 3:
         return form.duration && form.severity;
-      case 4:
+      case 3:
         return form.agreeTerms;
       default:
         return false;
@@ -170,29 +187,40 @@ export default function SymptomForm() {
   };
 
   /* Submit */
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setSubmitting(true);
-    // Simulate AI processing delay
-    setTimeout(() => {
-      // Determine triage level based on severity + duration heuristic
-      let level = "green"; // self-care
-      if (form.severity >= 3 || form.duration === "More than 2 weeks") {
-        level = "amber"; // GP consultation recommended
-      }
-      if (
-        form.severity === 4 &&
-        (form.duration === "Less than 24 hours" || form.duration === "1 – 3 days")
-      ) {
-        level = "red"; // urgent
-      }
 
-      navigate("/result", {
-        state: {
-          ...form,
+    // Determine triage level based on severity + duration heuristic
+    let level = "green"; // self-care
+    if (form.severity >= 3 || form.duration === "More than 2 weeks") {
+      level = "amber"; // GP consultation recommended
+    }
+    if (
+      form.severity === 4 &&
+      (form.duration === "Less than 24 hours" || form.duration === "1 – 3 days")
+    ) {
+      level = "red"; // urgent
+    }
+
+    try {
+      // Persist to Supabase
+      if (user) {
+        await createSubmission({
+          patientId: user.id,
+          formData: form,
           triageLevel: level,
-        },
-      });
-    }, 2000);
+        });
+      }
+    } catch (err) {
+      console.error("Failed to save submission:", err);
+    }
+
+    navigate("/patient/result", {
+      state: {
+        ...form,
+        triageLevel: level,
+      },
+    });
   };
 
   /* ── Step Renderers ── */
@@ -201,19 +229,19 @@ export default function SymptomForm() {
       case 0:
         return <StepAboutYou form={form} set={set} />;
       case 1:
-        return <StepBodyArea form={form} setForm={setForm} />;
-      case 2:
         return (
           <StepSymptoms
             form={form}
+            setForm={setForm}
+            toggleBodyArea={toggleBodyArea}
             toggleSymptom={toggleSymptom}
             addCustomSymptom={addCustomSymptom}
             set={set}
           />
         );
-      case 3:
+      case 2:
         return <StepDetails form={form} set={set} setForm={setForm} />;
-      case 4:
+      case 3:
         return <StepReview form={form} setForm={setForm} />;
       default:
         return null;
@@ -221,7 +249,7 @@ export default function SymptomForm() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
+    <div className={`mx-auto px-4 py-10 sm:px-6 lg:px-8 ${step === 1 ? "max-w-6xl" : "max-w-3xl"}`}>
       {/* Progress stepper */}
       <div className="mb-10">
         <div className="flex items-center justify-between">
@@ -379,113 +407,144 @@ function StepAboutYou({ form, set }) {
   );
 }
 
-function StepBodyArea({ form, setForm }) {
+function StepSymptoms({ form, setForm, toggleBodyArea, toggleSymptom, addCustomSymptom, set }) {
+  // Gather suggestions for every selected area
+  const allSuggestions = form.bodyAreas.flatMap((area) =>
+    (COMMON_SYMPTOMS[area] || []).map((s) => ({ symptom: s, area }))
+  );
+  // Deduplicate by symptom name
+  const seen = new Set();
+  const uniqueSuggestions = allSuggestions.filter(({ symptom }) => {
+    if (seen.has(symptom)) return false;
+    seen.add(symptom);
+    return true;
+  });
+
   return (
     <>
       <h2 className="mb-1 text-xl font-bold text-gray-900">
         Where are you experiencing symptoms?
       </h2>
       <p className="mb-6 text-sm text-gray-500">
-        Select the body area that best describes your concern.
+        Select one or more body areas, then choose all symptoms that apply.
       </p>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {BODY_AREAS.map((area) => (
-          <button
-            key={area}
-            onClick={() =>
-              setForm((prev) => ({
-                ...prev,
-                bodyArea: area,
-                selectedSymptoms: [],
-              }))
-            }
-            className={`rounded-xl border-2 px-4 py-3 text-left text-sm font-medium transition-all ${
-              form.bodyArea === area
-                ? "border-primary bg-primary/5 text-primary shadow-sm"
-                : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
-            }`}
-          >
-            {area}
-          </button>
-        ))}
-      </div>
-    </>
-  );
-}
+      <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
+        {/* LEFT: Body model + area list */}
+        <div className="flex flex-col items-center gap-4 lg:w-[380px] lg:shrink-0">
+          <BodyModel
+            selectedAreas={form.bodyAreas}
+            onToggleArea={toggleBodyArea}
+            gender={form.gender}
+          />
 
-function StepSymptoms({ form, toggleSymptom, addCustomSymptom, set }) {
-  const suggestions = COMMON_SYMPTOMS[form.bodyArea] || [];
-
-  return (
-    <>
-      <h2 className="mb-1 text-xl font-bold text-gray-900">
-        Select Your Symptoms
-      </h2>
-      <p className="mb-6 text-sm text-gray-500">
-        Choose all that apply for <strong>{form.bodyArea}</strong>. You can also
-        add your own.
-      </p>
-
-      {/* Suggestions */}
-      <div className="mb-6 flex flex-wrap gap-2">
-        {suggestions.map((s) => (
-          <button
-            key={s}
-            onClick={() => toggleSymptom(s)}
-            className={`rounded-full border px-4 py-2 text-sm font-medium transition-all ${
-              form.selectedSymptoms.includes(s)
-                ? "border-primary bg-primary text-white"
-                : "border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary"
-            }`}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-
-      {/* Custom symptom */}
-      <div className="flex gap-2">
-        <input
-          value={form.customSymptom}
-          onChange={set("customSymptom")}
-          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomSymptom())}
-          placeholder="Add another symptom…"
-          className="input-field flex-1"
-        />
-        <button
-          type="button"
-          onClick={addCustomSymptom}
-          className="shrink-0 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
-        >
-          Add
-        </button>
-      </div>
-
-      {/* Selected pills */}
-      {form.selectedSymptoms.length > 0 && (
-        <div className="mt-5">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Selected ({form.selectedSymptoms.length})
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {form.selectedSymptoms.map((s) => (
-              <span
-                key={s}
-                className="flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary"
-              >
-                {s}
+          <div className="w-full">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Or select from list
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {BODY_AREAS.map((area) => (
                 <button
-                  onClick={() => toggleSymptom(s)}
-                  className="ml-1 text-primary/60 hover:text-primary"
+                  key={area}
+                  onClick={() => toggleBodyArea(area)}
+                  className={`rounded-xl border-2 px-3 py-2 text-left text-sm font-medium transition-all ${
+                    form.bodyAreas.includes(area)
+                      ? "border-primary bg-primary/5 text-primary shadow-sm"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
                 >
-                  ×
+                  {area}
                 </button>
-              </span>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
-      )}
+
+        {/* RIGHT: Symptom selection */}
+        <div className="min-w-0 flex-1">
+          {form.bodyAreas.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
+              <ClipboardList className="mb-3 h-10 w-10 text-gray-300" />
+              <p className="text-sm text-gray-400">
+                Select a body area to see related symptoms
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Symptom suggestions grouped by area */}
+              {form.bodyAreas.map((area) => {
+                const areaSymptoms = COMMON_SYMPTOMS[area] || [];
+                if (areaSymptoms.length === 0) return null;
+                return (
+                  <div key={area} className="mb-5">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      {area}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {areaSymptoms.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => toggleSymptom(s)}
+                          className={`rounded-full border px-4 py-2 text-sm font-medium transition-all ${
+                            form.selectedSymptoms.includes(s)
+                              ? "border-primary bg-primary text-white"
+                              : "border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary"
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Custom symptom */}
+              <div className="mt-4 flex gap-2">
+                <input
+                  value={form.customSymptom}
+                  onChange={set("customSymptom")}
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomSymptom())}
+                  placeholder="Add another symptom…"
+                  className="input-field flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={addCustomSymptom}
+                  className="shrink-0 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
+                >
+                  Add
+                </button>
+              </div>
+
+              {/* Selected pills */}
+              {form.selectedSymptoms.length > 0 && (
+                <div className="mt-5">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Selected ({form.selectedSymptoms.length})
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {form.selectedSymptoms.map((s) => (
+                      <span
+                        key={s}
+                        className="flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary"
+                      >
+                        {s}
+                        <button
+                          onClick={() => toggleSymptom(s)}
+                          className="ml-1 text-primary/60 hover:text-primary"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </>
   );
 }
@@ -573,7 +632,7 @@ function StepReview({ form, setForm }) {
       <div className="space-y-4">
         <ReviewRow label="Name" value={`${form.firstName} ${form.lastName}`} />
         <ReviewRow label="Age / Gender" value={`${form.age} – ${form.gender}`} />
-        <ReviewRow label="Body Area" value={form.bodyArea} />
+        <ReviewRow label="Body Areas" value={form.bodyAreas.join(", ")} />
         <ReviewRow label="Symptoms" value={form.selectedSymptoms.join(", ")} />
         <ReviewRow label="Duration" value={form.duration} />
         <ReviewRow

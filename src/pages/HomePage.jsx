@@ -34,7 +34,7 @@ export default function HomePage() {
 
             <div className="animate-fade-in-up-delay-2 flex flex-col gap-3 sm:flex-row">
               <Link
-                to="/symptoms"
+                to="/patient/symptoms"
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-7 py-3.5 text-sm font-bold text-primary shadow-lg transition-transform hover:scale-[1.02]"
               >
                 Start Free Assessment <ArrowRight size={16} />
@@ -136,7 +136,7 @@ export default function HomePage() {
             will be reviewed by a real doctor.
           </p>
           <Link
-            to="/symptoms"
+            to="/patient/symptoms"
             className="inline-flex items-center gap-2 rounded-xl bg-white px-8 py-4 text-sm font-bold text-primary shadow-lg transition-transform hover:scale-[1.02]"
           >
             Start Your Assessment <ArrowRight size={16} />

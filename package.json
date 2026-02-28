@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/Joseph-MCS/digidoc-project-frontend-#readme",
   "dependencies": {
+    "@supabase/supabase-js": "^2.98.0",
     "lucide-react": "^0.575.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

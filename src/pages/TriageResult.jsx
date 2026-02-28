@@ -73,7 +73,7 @@ export default function TriageResult() {
           It looks like you haven't submitted a symptom assessment yet.
         </p>
         <Link
-          to="/symptoms"
+          to="/patient/symptoms"
           className="rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-dark"
         >
           Start Assessment
@@ -113,7 +113,7 @@ export default function TriageResult() {
         <div className="space-y-3 text-sm">
           <SummaryRow label="Patient" value={`${state.firstName} ${state.lastName}`} />
           <SummaryRow label="Age / Gender" value={`${state.age} – ${state.gender}`} />
-          <SummaryRow label="Body Area" value={state.bodyArea} />
+          <SummaryRow label="Body Areas" value={Array.isArray(state.bodyAreas) ? state.bodyAreas.join(", ") : state.bodyAreas} />
           <SummaryRow label="Symptoms" value={state.selectedSymptoms?.join(", ")} />
           <SummaryRow label="Duration" value={state.duration} />
           <SummaryRow
@@ -159,7 +159,7 @@ export default function TriageResult() {
       {/* Actions */}
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
         <Link
-          to="/symptoms"
+          to="/patient/symptoms"
           className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-6 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
         >
           <ArrowLeft size={16} /> New Assessment

@@ -1,21 +1,29 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { Menu, X, Stethoscope } from "lucide-react";
+import { Menu, X, Stethoscope, LogOut } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
+  const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   const links = [
-    { to: "/", label: "Home" },
-    { to: "/symptoms", label: "Check Symptoms" },
+    { to: "/patient", label: "Home" },
+    { to: "/patient/symptoms", label: "Check Symptoms" },
   ];
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2">
+        <Link to="/patient" className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-white">
             <Stethoscope size={20} />
           </div>
@@ -40,11 +48,25 @@ export default function Navbar() {
             </Link>
           ))}
           <Link
-            to="/symptoms"
+            to="/patient/symptoms"
             className="ml-3 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-dark"
           >
             Start Assessment
           </Link>
+          {profile && (
+            <>
+              <span className="ml-3 text-xs text-gray-500">
+                {profile.first_name}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="ml-2 rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                title="Sign out"
+              >
+                <LogOut size={16} />
+              </button>
+            </>
+          )}
         </nav>
 
         {/* Mobile toggle */}
@@ -75,12 +97,20 @@ export default function Navbar() {
             </Link>
           ))}
           <Link
-            to="/symptoms"
+            to="/patient/symptoms"
             onClick={() => setOpen(false)}
             className="mt-2 block rounded-lg bg-primary px-4 py-2.5 text-center text-sm font-semibold text-white"
           >
             Start Assessment
           </Link>
+          {profile && (
+            <button
+              onClick={() => { setOpen(false); handleLogout(); }}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600"
+            >
+              <LogOut size={14} /> Sign Out
+            </button>
+          )}
         </nav>
       )}
     </header>

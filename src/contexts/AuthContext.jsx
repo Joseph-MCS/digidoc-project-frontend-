@@ -75,14 +75,14 @@ export function AuthProvider({ children }) {
 
   const signIn = async ({ email, password }) => {
     // Check demo accounts first (works without a backend)
-    const demo = DEMO_USERS[email.toLowerCase()];
+    const demo = DEMO_USERS[email.trim().toLowerCase()];
     if (demo) {
-      if (demo.password !== password) throw new Error("Incorrect password for demo account.");
+      if (demo.password !== password.trim()) throw new Error("Incorrect password for demo account.");
       setUser(demo.user);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(demo.user));
       return demo.user;
     }
-    const userData = await apiPost("/auth/login", { email, password });
+    const userData = await apiPost("/auth/login", { email: email.trim(), password: password.trim() });
     setUser(userData);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
     return userData;

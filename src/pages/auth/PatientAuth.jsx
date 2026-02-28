@@ -83,6 +83,16 @@ export default function PatientAuth() {
             ))}
           </div>
 
+          {/* Demo info box */}
+          <div className="mb-5 flex items-center gap-2 rounded-lg bg-primary/5 p-3">
+            <Stethoscope size={16} className="text-primary" />
+            <p className="text-xs text-gray-600">
+              {mode === "login"
+                ? "Demo Patient account: patient@demo.ie / demo1234"
+                : "Register a new patient account for this portal."}
+            </p>
+          </div>
+
           {successMsg && (
             <div className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-700">
               {successMsg}

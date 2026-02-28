@@ -1,8 +1,13 @@
 {
-  "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "server/index.js": {
+      "includeFiles": "node_modules/sql.js/dist/**"
+    }
+  },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    { "source": "/api/:path*", "destination": "/server/index.js" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

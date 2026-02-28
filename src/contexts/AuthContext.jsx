@@ -1,144 +1,69 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext({
   user: null,
   profile: null,
   loading: true,
-  signUp: async () => {},
   signIn: async () => {},
-  signOut: async () => {},
+  signUp: async () => {},
+  signOut: () => {},
 });
+
+const STORAGE_KEY = "digidoc_user";
+
+async function apiPost(path, body) {
+  const res = await fetch("/api" + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  /* Fetch profile from public.profiles, including practice info */
-  const fetchProfile = async (userId) => {
-    try {
-      // Try the full query with practice join first
-      let { data, error } = await supabase
-        .from("profiles")
-        .select("*, practice:practices!profiles_practice_id_fkey(id, name, address)")
-        .eq("id", userId)
-        .single();
-
-      // If the join fails (practices table may not exist yet), fall back to plain query
-      if (error) {
-        const fallback = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", userId)
-          .single();
-        data = fallback.data;
-        error = fallback.error;
-      }
-
-      if (!error && data) {
-        // For GPs, also try to fetch the practices they own
-        if (data.role === "gp") {
-          try {
-            const { data: owned } = await supabase
-              .from("practices")
-              .select("*")
-              .eq("owner_id", userId)
-              .order("name");
-            data.owned_practices = owned || [];
-          } catch {
-            data.owned_practices = [];
-          }
-        }
-        setProfile(data);
-      }
-      return data;
-    } catch (err) {
-      console.error("fetchProfile error:", err);
-      return null;
-    }
-  };
-
-  /* Listen to auth state changes */
+  // Restore session from localStorage on mount
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) {
-        fetchProfile(u.id).finally(() => setLoading(false));
-      } else {
-        setLoading(false);
-      }
-    }).catch((err) => {
-      console.error("getSession error:", err);
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) setUser(JSON.parse(stored));
+    } catch {
+      // ignore malformed data
+    } finally {
       setLoading(false);
-    });
-
-    // Subscribe to changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) {
-        await fetchProfile(u.id);
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    }
   }, []);
 
-  /* Sign up (patient by default) */
-  const signUp = async ({
-    email,
-    password,
-    firstName,
-    lastName,
-    role = "patient",
-    practiceId,
-  }) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          first_name: firstName,
-          last_name: lastName,
-          role,
-          practice_id: practiceId || null,
-        },
-      },
-    });
-    if (error) throw error;
-    return data;
-  };
-
-  /* Sign in */
   const signIn = async ({ email, password }) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) throw error;
-    return data;
+    const userData = await apiPost("/auth/login", { email, password });
+    setUser(userData);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+    return userData;
   };
 
-  /* Sign out */
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    setUser(null);
-    setProfile(null);
+  const signUp = async ({ email, password, firstName = "", lastName = "", role = "patient" }) => {
+    const userData = await apiPost("/auth/register", { email, password, firstName, lastName, role });
+    setUser(userData);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+    return userData;
   };
+
+  const signOut = () => {
+    setUser(null);
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
+  // `profile` keeps the same shape the rest of the app expects
+  const profile = user
+    ? { ...user, first_name: user.first_name, last_name: user.last_name }
+    : null;
 
   return (
-    <AuthContext.Provider
-      value={{ user, profile, loading, signUp, signIn, signOut }}
-    >
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

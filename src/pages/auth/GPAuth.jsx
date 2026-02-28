@@ -2,9 +2,9 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import {
-  Stethoscope,
   Mail,
   Lock,
+  User,
   Loader2,
   AlertCircle,
   ArrowLeft,
@@ -13,12 +13,15 @@ import {
 } from "lucide-react";
 
 export default function GPAuth() {
+  const [mode, setMode] = useState("login"); // "login" | "signup"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const { signIn } = useAuth();
+  const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -27,10 +30,12 @@ export default function GPAuth() {
     setLoading(true);
 
     try {
-      const { user } = await signIn({ email, password });
-      // After signIn the AuthContext will fetch the profile.
-      // Give it a moment to propagate — the ProtectedRoute will
-      // handle the role check.
+      if (mode === "login") {
+        await signIn({ email, password });
+      } else {
+        if (!firstName || !lastName) throw new Error("First and last name are required.");
+        await signUp({ email, password, firstName, lastName, role: "gp" });
+      }
       navigate("/gp");
     } catch (err) {
       setError(err.message || "Invalid email or password.");
@@ -41,7 +46,6 @@ export default function GPAuth() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
-      {/* Back link */}
       <Link
         to="/"
         className="mb-8 inline-flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600"
@@ -61,17 +65,31 @@ export default function GPAuth() {
           <p className="mt-1 text-sm text-gray-500">GP Office Portal</p>
         </div>
 
-        {/* Card */}
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-          <div className="mb-6 flex items-center gap-2 rounded-lg bg-accent/5 p-3">
+          {/* Tab toggle */}
+          <div className="mb-5 flex rounded-lg bg-gray-100 p-1">
+            {["login", "signup"].map((m) => (
+              <button
+                key={m}
+                onClick={() => { setMode(m); setError(""); }}
+                className={`flex-1 rounded-md py-2 text-sm font-semibold transition-all ${
+                  mode === m ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+                }`}
+              >
+                {m === "login" ? "Sign In" : "Register"}
+              </button>
+            ))}
+          </div>
+
+          <div className="mb-5 flex items-center gap-2 rounded-lg bg-accent/5 p-3">
             <Shield size={16} className="text-accent" />
             <p className="text-xs text-gray-600">
-              This portal is for authorised GP staff only. Contact your
-              administrator for access credentials.
+              {mode === "login"
+                ? "Demo GP account: gp@demo.ie / demo1234"
+                : "Register a new GP account for this practice."}
             </p>
           </div>
 
-          {/* Error */}
           {error && (
             <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
               <AlertCircle size={16} className="shrink-0" />
@@ -80,21 +98,49 @@ export default function GPAuth() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Name fields (signup only) */}
+            {mode === "signup" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-600">
+                    First Name
+                  </label>
+                  <div className="relative">
+                    <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="Dr. Jane"
+                      className="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/10"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-600">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Smith"
+                    className="w-full rounded-lg border border-gray-200 py-2.5 px-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/10"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Email */}
             <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">
-                Email
-              </label>
+              <label className="mb-1 block text-xs font-semibold text-gray-600">Email</label>
               <div className="relative">
-                <Mail
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                />
+                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="doctor@riverside-medical.ie"
+                  placeholder="doctor@clinic.ie"
                   required
                   className="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/10"
                 />
@@ -103,26 +149,21 @@ export default function GPAuth() {
 
             {/* Password */}
             <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">
-                Password
-              </label>
+              <label className="mb-1 block text-xs font-semibold text-gray-600">Password</label>
               <div className="relative">
-                <Lock
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                />
+                <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder={mode === "signup" ? "Min. 6 characters" : "••••••••"}
                   required
+                  minLength={6}
                   className="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/10"
                 />
               </div>
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
@@ -130,15 +171,17 @@ export default function GPAuth() {
             >
               {loading ? (
                 <Loader2 size={18} className="animate-spin" />
-              ) : (
+              ) : mode === "login" ? (
                 "Sign In to GP Portal"
+              ) : (
+                "Create GP Account"
               )}
             </button>
           </form>
         </div>
 
         <p className="mt-6 text-center text-xs text-gray-400">
-          Protected by Supabase Auth · Row Level Security enabled
+          Secure · Local SQLite Database · Ireland
         </p>
       </div>
     </div>

@@ -1,0 +1,4 @@
+# ─── Supabase Configuration ───
+# Get these from: https://supabase.com → Project Settings → API
+VITE_SUPABASE_URL=https://xwyajcjivauogyheilwm.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3eWFqY2ppdmF1b2d5aGVpbHdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyODEzNDYsImV4cCI6MjA4Nzg1NzM0Nn0.JytLToNi_oJAAheDicaObH6XqD2s2gymQRShmbFOW-o

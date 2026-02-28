@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { getPractices } from "../../lib/database";
 import {
   Stethoscope,
   Mail,
@@ -10,7 +9,6 @@ import {
   Loader2,
   AlertCircle,
   ArrowLeft,
-  Building2,
 } from "lucide-react";
 
 export default function PatientAuth() {
@@ -19,21 +17,12 @@ export default function PatientAuth() {
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [practiceId, setPracticeId] = useState("");
-  const [practices, setPractices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
-
-  /* Fetch available GP practices for the signup dropdown */
-  useEffect(() => {
-    getPractices()
-      .then((data) => setPractices(data || []))
-      .catch(() => setPractices([]));
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,24 +35,9 @@ export default function PatientAuth() {
         await signIn({ email, password });
         navigate("/patient");
       } else {
-        if (!firstName || !lastName) {
-          throw new Error("First and last name are required.");
-        }
-        if (!practiceId) {
-          throw new Error("Please select your GP practice.");
-        }
-        await signUp({
-          email,
-          password,
-          firstName,
-          lastName,
-          role: "patient",
-          practiceId,
-        });
-        setSuccessMsg(
-          "Account created! Check your email for a confirmation link, then sign in."
-        );
-        setMode("login");
+        if (!firstName || !lastName) throw new Error("First and last name are required.");
+        await signUp({ email, password, firstName, lastName, role: "patient" });
+        navigate("/patient");
       }
     } catch (err) {
       setError(err.message || "Something went wrong.");
@@ -74,7 +48,6 @@ export default function PatientAuth() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
-      {/* Back to portal */}
       <Link
         to="/"
         className="mb-8 inline-flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600"
@@ -94,40 +67,28 @@ export default function PatientAuth() {
           <p className="mt-1 text-sm text-gray-500">Patient Portal</p>
         </div>
 
-        {/* Card */}
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
           {/* Tab toggle */}
           <div className="mb-6 flex rounded-lg bg-gray-100 p-1">
-            <button
-              onClick={() => { setMode("login"); setError(""); }}
-              className={`flex-1 rounded-md py-2 text-sm font-semibold transition-all ${
-                mode === "login"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500"
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => { setMode("signup"); setError(""); }}
-              className={`flex-1 rounded-md py-2 text-sm font-semibold transition-all ${
-                mode === "signup"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500"
-              }`}
-            >
-              Create Account
-            </button>
+            {["login", "signup"].map((m) => (
+              <button
+                key={m}
+                onClick={() => { setMode(m); setError(""); }}
+                className={`flex-1 rounded-md py-2 text-sm font-semibold transition-all ${
+                  mode === m ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+                }`}
+              >
+                {m === "login" ? "Sign In" : "Create Account"}
+              </button>
+            ))}
           </div>
 
-          {/* Success message */}
           {successMsg && (
             <div className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-700">
               {successMsg}
             </div>
           )}
 
-          {/* Error message */}
           {error && (
             <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
               <AlertCircle size={16} className="shrink-0" />
@@ -144,15 +105,12 @@ export default function PatientAuth() {
                     First Name
                   </label>
                   <div className="relative">
-                    <User
-                      size={16}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                    />
+                    <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="text"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="Joseph"
+                      placeholder="Aoife"
                       className="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
                     />
                   </div>
@@ -172,48 +130,11 @@ export default function PatientAuth() {
               </div>
             )}
 
-            {/* GP Practice (signup only) */}
-            {mode === "signup" && (
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">
-                  Your GP Practice
-                </label>
-                <div className="relative">
-                  <Building2
-                    size={16}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <select
-                    value={practiceId}
-                    onChange={(e) => setPracticeId(e.target.value)}
-                    className="w-full appearance-none rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-8 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
-                  >
-                    <option value="">Select your GP practice…</option>
-                    {practices.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}{p.address ? ` — ${p.address}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {practices.length === 0 && (
-                  <p className="mt-1 text-xs text-amber-600">
-                    No practices available yet. Contact your GP office.
-                  </p>
-                )}
-              </div>
-            )}
-
             {/* Email */}
             <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">
-                Email
-              </label>
+              <label className="mb-1 block text-xs font-semibold text-gray-600">Email</label>
               <div className="relative">
-                <Mail
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                />
+                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="email"
                   value={email}
@@ -227,14 +148,9 @@ export default function PatientAuth() {
 
             {/* Password */}
             <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">
-                Password
-              </label>
+              <label className="mb-1 block text-xs font-semibold text-gray-600">Password</label>
               <div className="relative">
-                <Lock
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                />
+                <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="password"
                   value={password}
@@ -247,7 +163,6 @@ export default function PatientAuth() {
               </div>
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
@@ -264,10 +179,8 @@ export default function PatientAuth() {
           </form>
         </div>
 
-        {/* Footer */}
         <p className="mt-6 text-center text-xs text-gray-400">
-          By continuing, you agree to DigiDoc's Terms of Service &amp; Privacy
-          Policy.
+          By continuing, you agree to DigiDoc's Terms of Service &amp; Privacy Policy.
         </p>
       </div>
     </div>

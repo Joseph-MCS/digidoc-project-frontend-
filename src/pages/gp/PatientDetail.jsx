@@ -17,6 +17,10 @@ import {
   ChevronUp,
   Activity,
   Send,
+  Building2,
+  MapPin,
+  CalendarPlus,
+  X,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -24,8 +28,35 @@ import {
   getSubmissionActions,
   createGPAction,
   updateSubmissionStatus,
+  createAppointment,
+  getSubmissionAppointments,
 } from "../../lib/database";
 import { PATIENTS, AI_ANALYSES } from "../../data/mockPatients";
+
+const IRISH_HOSPITALS = [
+  "Beaumont Hospital",
+  "St. Vincent's University Hospital",
+  "Mater Misericordiae University Hospital",
+  "St. James's Hospital",
+  "Tallaght University Hospital",
+  "Children's Health Ireland at Crumlin",
+  "University Hospital Galway",
+  "Cork University Hospital",
+  "University Hospital Limerick",
+  "Sligo University Hospital",
+  "Letterkenny University Hospital",
+  "Waterford University Hospital",
+  "Naas General Hospital",
+  "Our Lady of Lourdes Hospital, Drogheda",
+  "South Tipperary General Hospital",
+];
+
+const DEPARTMENTS = [
+  "Cardiology", "Gastroenterology", "Respiratory Medicine", "Neurology",
+  "Orthopaedics", "General Surgery", "ENT", "Ophthalmology", "Dermatology",
+  "Rheumatology", "Oncology", "Urology", "Gynaecology",
+  "Psychiatry / Mental Health", "Endocrinology", "Haematology", "Nephrology",
+];
 
 export default function PatientDetail() {
   const { id } = useParams();
@@ -46,15 +77,31 @@ export default function PatientDetail() {
   const [actionNotes, setActionNotes] = useState("");
   const [actionSaving, setActionSaving] = useState(false);
 
+  // Hospital booking
+  const [bookingOpen, setBookingOpen] = useState(true);
+  const [bookingSaving, setBookingSaving] = useState(false);
+  const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [appointments, setAppointments] = useState([]);
+  const [bookingForm, setBookingForm] = useState({
+    hospital: "",
+    department: "",
+    doctor: "",
+    appointmentDate: "",
+    appointmentTime: "",
+    reason: "",
+  });
+
   useEffect(() => {
     async function load() {
       try {
-        const [sub, acts] = await Promise.all([
+        const [sub, acts, apts] = await Promise.all([
           getSubmission(id),
           getSubmissionActions(id),
+          getSubmissionAppointments(id),
         ]);
         setSubmission(sub);
         setActions(acts);
+        setAppointments(apts);
       } catch {
         // Fallback to mock data
         const mock = PATIENTS.find((p) => p.id === id);
@@ -157,6 +204,32 @@ export default function PatientDetail() {
       console.error("Failed to save action:", err);
     } finally {
       setActionSaving(false);
+    }
+  };
+
+  const handleBookAppointment = async () => {
+    if (!bookingForm.hospital || !bookingForm.appointmentDate || !bookingForm.appointmentTime) return;
+    setBookingSaving(true);
+    try {
+      await createAppointment({
+        submissionId: s.id,
+        patientId: s.patient_id,
+        gpId: user.id,
+        ...bookingForm,
+      });
+      const [updatedApts, updatedActions] = await Promise.all([
+        getSubmissionAppointments(s.id),
+        getSubmissionActions(s.id),
+      ]);
+      setAppointments(updatedApts);
+      setActions(updatedActions);
+      setBookingSuccess(true);
+      setBookingForm({ hospital: "", department: "", doctor: "", appointmentDate: "", appointmentTime: "", reason: "" });
+      setTimeout(() => { setBookingSuccess(false); setBookingOpen(false); }, 2500);
+    } catch (err) {
+      console.error("Failed to book appointment:", err);
+    } finally {
+      setBookingSaving(false);
     }
   };
 
@@ -348,6 +421,135 @@ export default function PatientDetail() {
         </div>
       )}
 
+      {/* Hospital Referral Booking */}
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <button
+          onClick={() => setBookingOpen(!bookingOpen)}
+          className="flex w-full items-center justify-between px-6 py-4 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-50"
+        >
+          <span className="flex items-center gap-2">
+            <Building2 size={16} className="text-primary" />
+            Book Hospital Referral
+          </span>
+          {bookingOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+
+        {bookingOpen && (
+          <div className="border-t border-gray-100 px-6 pb-6 pt-4">
+            {bookingSuccess ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-green-600">
+                <CheckCircle size={20} />
+                <span className="font-semibold">Appointment booked successfully!</span>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-semibold text-gray-500">
+                    Hospital <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={bookingForm.hospital}
+                    onChange={(e) => { const v = e.target.value; setBookingForm(f => ({ ...f, hospital: v })); }}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                  >
+                    <option value="">Select hospital…</option>
+                    {IRISH_HOSPITALS.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-500">Department</label>
+                  <select
+                    value={bookingForm.department}
+                    onChange={(e) => { const v = e.target.value; setBookingForm(f => ({ ...f, department: v })); }}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                  >
+                    <option value="">Select department…</option>
+                    {DEPARTMENTS.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-500">Consultant / Doctor</label>
+                  <input
+                    value={bookingForm.doctor}
+                    onChange={(e) => { const v = e.target.value; setBookingForm(f => ({ ...f, doctor: v })); }}
+                    placeholder="e.g. Dr. Murphy"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-500">
+                    Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={bookingForm.appointmentDate}
+                    min={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => { const v = e.target.value; setBookingForm(f => ({ ...f, appointmentDate: v })); }}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-500">
+                    Time <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="time"
+                    value={bookingForm.appointmentTime}
+                    onChange={(e) => { const v = e.target.value; setBookingForm(f => ({ ...f, appointmentTime: v })); }}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-semibold text-gray-500">Reason for Referral</label>
+                  <textarea
+                    value={bookingForm.reason}
+                    onChange={(e) => { const v = e.target.value; setBookingForm(f => ({ ...f, reason: v })); }}
+                    placeholder="Reason for hospital referral…"
+                    rows={2}
+                    className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 sm:col-span-2">
+                  {(!bookingForm.hospital || !bookingForm.appointmentDate || !bookingForm.appointmentTime) && (
+                    <p className="text-xs text-gray-400">
+                      {!bookingForm.hospital ? "Select a hospital" : !bookingForm.appointmentDate ? "Pick a date" : "Set a time"}
+                    </p>
+                  )}
+                  <button
+                    onClick={() => setBookingOpen(false)}
+                    className="px-4 py-2 text-sm font-semibold text-gray-500 hover:text-gray-900"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleBookAppointment}
+                    disabled={bookingSaving || !bookingForm.hospital || !bookingForm.appointmentDate || !bookingForm.appointmentTime}
+                    className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {bookingSaving ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <CalendarPlus size={14} />
+                    )}
+                    Book Appointment
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Tabs */}
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex gap-6">
@@ -425,6 +627,62 @@ export default function PatientDetail() {
               {s.profiles?.email && <DetailRow label="Email" value={s.profiles.email} />}
             </div>
           </div>
+
+          {/* Booked Appointments */}
+          {appointments.length > 0 && (
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6 shadow-sm lg:col-span-2">
+              <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-gray-900">
+                <Building2 size={16} className="text-primary" />
+                Hospital Appointments
+              </h2>
+              <div className="space-y-3">
+                {appointments.map((apt) => (
+                  <div
+                    key={apt.id}
+                    className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex items-start gap-3">
+                      <MapPin size={16} className="mt-0.5 shrink-0 text-primary" />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{apt.hospital}</p>
+                        {(apt.department || apt.doctor) && (
+                          <p className="text-xs text-gray-500">
+                            {[apt.department, apt.doctor].filter(Boolean).join(" · ")}
+                          </p>
+                        )}
+                        {apt.reason && (
+                          <p className="mt-1 text-xs text-gray-400">{apt.reason}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 pl-7 sm:pl-0">
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-gray-900">
+                          {new Date(apt.appointment_date).toLocaleDateString("en-IE", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </p>
+                        <p className="text-xs text-gray-500">{apt.appointment_time}</p>
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          apt.status === "confirmed"
+                            ? "bg-green-100 text-green-700"
+                            : apt.status === "cancelled"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {apt.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* GP Actions panel */}
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm lg:col-span-2">

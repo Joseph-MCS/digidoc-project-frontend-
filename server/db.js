@@ -54,8 +54,12 @@ function createWrapper(sqlDb) {
 
 // ── Bootstrap (async, called once at startup) ────────────────────────────────
 export async function openDatabase() {
+  // On Vercel, the WASM file isn't bundled automatically — load from CDN instead
   const SQL = await initSqlJs({
-    locateFile: () => WASM_PATH,
+    locateFile: (file) =>
+      process.env.VERCEL
+        ? `https://unpkg.com/sql.js@1.12.0/dist/${file}`
+        : join(__dirname, `../node_modules/sql.js/dist/${file}`),
   });
 
   // On Vercel: copy committed DB to /tmp on cold start
@@ -135,7 +139,7 @@ export async function openDatabase() {
   // Persist the freshly created schema
   writeFileSync(DB_PATH, Buffer.from(sqlDb.export()));
 
-  // ── Seed demo GP ─────────────────────────────────────────────────────────
+  // ── Seed demo accounts ───────────────────────────────────────────────────
   const demoGP = db.get("SELECT id FROM users WHERE email = ?", ["gp@demo.ie"]);
   if (!demoGP) {
     const hash = bcrypt.hashSync("demo1234", 10);
@@ -144,6 +148,16 @@ export async function openDatabase() {
       ["gp@demo.ie", hash, "gp", "Dr. Sarah", "O'Brien"]
     );
     console.log("✓ Demo GP seeded  →  gp@demo.ie / demo1234");
+  }
+
+  const demoPatient = db.get("SELECT id FROM users WHERE email = ?", ["patient@demo.ie"]);
+  if (!demoPatient) {
+    const hash = bcrypt.hashSync("demo1234", 10);
+    db.run(
+      "INSERT INTO users (email, password, role, first_name, last_name) VALUES (?, ?, ?, ?, ?)",
+      ["patient@demo.ie", hash, "patient", "Rakesh", "Lakshmanan"]
+    );
+    console.log("✓ Demo Patient seeded  →  patient@demo.ie / demo1234");
   }
 
   return db;

@@ -2,6 +2,8 @@
 
 DigiDoc is a digital healthcare triage platform designed to reduce waiting lists in Ireland by assessing non-serious health concerns online. Patients submit their symptoms through the platform, where AI-assisted processing and licensed doctors review cases, especially during weekends. The system determines whether the issue requires urgent specialist care or can be managed through self-care or routine GP consultation.
 
+Project currently deployed here : https://digidoc-git-appointmenttracking-joseph-mcs-projects.vercel.app/
+
 ## Features
 
 ### Patient Portal (`/patient`)
